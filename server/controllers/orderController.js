@@ -100,7 +100,7 @@ export const placeOrderStripe = async (req, res) => {
     const session = await stripeInstance.checkout.sessions.create({
       line_items,
       mode: "payment",
-      success_url: `${origin}/loader?next=my-orders&userId=${userId}`,
+      success_url: `${origin}/loader?next=my-orders`,
       cancel_url: `${origin}/cart`,
       metadata: {
         orderId: order._id.toString(),
@@ -120,6 +120,10 @@ export const placeOrderStripe = async (req, res) => {
 
 //Stripe webhook to verify payment action : /stripe
 export const stripeWebhooks = async (req , res) => {
+
+  console.log("🔥 WEBHOOK HIT");
+
+
   //stripe gateway initialize
   const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -130,30 +134,31 @@ export const stripeWebhooks = async (req , res) => {
       req.body, 
       sig , 
       process.env.STRIPE_WEBHOOK_SECRET
-    )
+    );
+
+    console.log("✅ EVENT TYPE:", event.type);
+
+
   } catch (error) {
     res.status(400).send(`Webhook Error: ${error.message}`);
   }
 
   //Handle the event
   switch (event.type) {
-    case "payment_intent.succeeded":{
-      const paymentIntent = event.data.object;
+  case "checkout.session.completed": {
 
-      const paymentIntentId = paymentIntent.id;
+    const session = event.data.object; // ✅ this is already session
 
-      //Gettin session metadata
-      const session = await stripeInstance.checkout.sessions.list({
-        payment_intent: paymentIntentId,
-      });
+    const { orderId, userId } = session.metadata;
 
-      const { orderId , userId} = session.data[0].metadata;
-      //Mark payment as paid
-      await Order.findByIdAndUpdate(orderId , {isPaid: true});
-      //Clear user cart
-      await User.findByIdAndUpdate(userId , {cartItems: {}});
+    // ✅ mark order as paid
+    await Order.findByIdAndUpdate(orderId, { isPaid: true });
+
+    // ✅ clear cart
+    await User.findByIdAndUpdate(userId, { cartItems: {} });
+
     break;
-    }
+  }
       case "payment_intent.payment_failed":{
         const paymentIntent = event.data.object;
 
@@ -184,7 +189,7 @@ export const stripeWebhooks = async (req , res) => {
 //Get Orders by user Id : /api/order/user
 export const getUserOrders = async (req ,res) =>{
     try {
-        const { userId } = req.body;
+        const userId = req.userId;
         const orders = await Order.find({
             userId,
             $or: [{paymentType: "COD"} , {isPaid: true}]
