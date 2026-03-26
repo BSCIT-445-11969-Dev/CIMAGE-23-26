@@ -77,6 +77,7 @@ export const placeOrderStripe = async (req, res) => {
       amount,
       address,
       paymentType: "Online",
+      isPaid: true
     });
 
     //stripe gateway initialize
@@ -121,9 +122,6 @@ export const placeOrderStripe = async (req, res) => {
 //Stripe webhook to verify payment action : /stripe
 export const stripeWebhooks = async (req , res) => {
 
-  console.log("🔥 WEBHOOK HIT");
-
-
   //stripe gateway initialize
   const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -135,9 +133,6 @@ export const stripeWebhooks = async (req , res) => {
       sig , 
       process.env.STRIPE_WEBHOOK_SECRET
     );
-
-    console.log("✅ EVENT TYPE:", event.type);
-
 
   } catch (error) {
     res.status(400).send(`Webhook Error: ${error.message}`);
@@ -192,7 +187,7 @@ export const getUserOrders = async (req ,res) =>{
         const userId = req.userId;
         const orders = await Order.find({
             userId,
-            $or: [{paymentType: "COD"} , {isPaid: true}]
+            
         }).populate("items.product address").sort({createdAt: -1});
         res.json({success: true , orders})
     } catch (error) {
